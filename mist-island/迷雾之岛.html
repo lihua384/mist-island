@@ -1,0 +1,1235 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>迷雾之岛 - 2D解谜冒险游戏</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: "PingFang SC", "Microsoft YaHei", "Hiragino Sans GB", sans-serif;
+    background: linear-gradient(to bottom, #0c4a6e, #78350f, #451a03);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 16px;
+    color: #fef3c7;
+    overflow-x: hidden;
+  }
+  #game-container {
+    width: 100%;
+    max-width: 820px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+  }
+  /* 顶部栏 */
+  #top-bar {
+    width: 100%;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+    background: rgba(69, 26, 3, 0.85);
+    border: 2px solid rgba(180, 83, 9, 0.6);
+    border-radius: 10px;
+    padding: 10px 14px;
+    backdrop-filter: blur(6px);
+  }
+  #scene-info { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0; }
+  #scene-info .icon { font-size: 20px; }
+  #scene-name { color: #fde68a; font-weight: bold; font-size: 15px; }
+  #scene-desc { color: rgba(252, 211, 77, 0.7); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .top-btn {
+    background: #b45309; color: #fef3c7; border: 2px solid rgba(180, 83, 9, 0.6);
+    padding: 7px 12px; border-radius: 8px; font-size: 13px; font-weight: 500;
+    cursor: pointer; transition: all 0.15s; white-space: nowrap;
+  }
+  .top-btn:hover { background: #d97706; transform: translateY(-1px); }
+  /* Canvas */
+  #canvas-wrap {
+    position: relative;
+    width: 100%;
+    max-width: 800px;
+  }
+  canvas {
+    width: 100%;
+    height: auto;
+    border: 2px solid rgba(120, 53, 15, 0.5);
+    border-radius: 10px;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+    cursor: pointer;
+    display: block;
+    background: #87CEEB;
+  }
+  #tooltip {
+    position: absolute;
+    background: rgba(0,0,0,0.85);
+    color: #fff;
+    font-size: 12px;
+    padding: 4px 8px;
+    border-radius: 4px;
+    pointer-events: none;
+    white-space: nowrap;
+    z-index: 10;
+    transform: translate(-50%, -100%);
+    display: none;
+  }
+  /* 背包 */
+  #inventory {
+    width: 100%;
+    background: rgba(69, 26, 3, 0.85);
+    border: 2px solid rgba(180, 83, 9, 0.6);
+    border-radius: 10px;
+    padding: 10px 12px;
+    backdrop-filter: blur(6px);
+  }
+  #inv-title { color: #fde68a; font-size: 12px; font-weight: bold; margin-bottom: 8px; display: flex; align-items: center; gap: 4px; }
+  #inv-slots { display: grid; grid-template-columns: repeat(9, 1fr); gap: 5px; }
+  .inv-slot {
+    aspect-ratio: 1;
+    border-radius: 6px;
+    border: 2px solid rgba(120, 53, 15, 0.5);
+    background: rgba(69, 26, 3, 0.4);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 22px;
+    transition: all 0.15s;
+  }
+  .inv-slot.has-item {
+    background: rgba(254, 243, 199, 0.9);
+    border-color: #b45309;
+    cursor: pointer;
+  }
+  .inv-slot.has-item:hover {
+    transform: scale(1.1);
+    background: #fef3c7;
+    box-shadow: 0 0 12px rgba(245, 158, 11, 0.6);
+  }
+  /* 底部提示 */
+  #footer-tip {
+    color: rgba(252, 211, 77, 0.6);
+    font-size: 11px;
+    text-align: center;
+    max-width: 600px;
+    line-height: 1.6;
+  }
+  /* 弹窗通用 */
+  .modal-overlay {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.7);
+    display: none;
+    align-items: center; justify-content: center;
+    z-index: 100;
+    padding: 16px;
+  }
+  .modal-overlay.show { display: flex; }
+  .modal-box {
+    background: #fef3c7;
+    color: #451a03;
+    border-radius: 14px;
+    padding: 22px;
+    max-width: 420px;
+    width: 100%;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+    border: 3px solid #b45309;
+    animation: pop 0.25s ease-out;
+  }
+  @keyframes pop { from { transform: scale(0.85); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+  .modal-title { font-size: 18px; font-weight: bold; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
+  .modal-desc { font-size: 13px; line-height: 1.7; color: #78350f; margin-bottom: 16px; }
+  .modal-btn {
+    background: #b45309; color: #fff; border: none;
+    padding: 10px 16px; border-radius: 8px; font-size: 14px; font-weight: bold;
+    cursor: pointer; transition: all 0.15s; width: 100%;
+  }
+  .modal-btn:hover { background: #d97706; }
+  .modal-btn.secondary { background: transparent; color: #78350f; font-weight: 500; }
+  .modal-btn.secondary:hover { background: rgba(180, 83, 9, 0.1); }
+  /* 对话框 */
+  #dialog-box {
+    position: fixed;
+    bottom: 20px; left: 50%;
+    transform: translateX(-50%);
+    width: 90%; max-width: 600px;
+    background: rgba(69, 26, 3, 0.95);
+    border: 2px solid rgba(180, 83, 9, 0.7);
+    border-radius: 12px;
+    padding: 14px 16px;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+    z-index: 50;
+    display: none;
+    backdrop-filter: blur(8px);
+  }
+  #dialog-box.show { display: block; }
+  #dialog-content { display: flex; align-items: flex-start; gap: 10px; }
+  #dialog-icon { font-size: 28px; flex-shrink: 0; animation: pulse 1.5s infinite; }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.6; } }
+  #dialog-text { color: #fef3c7; font-size: 14px; line-height: 1.6; flex: 1; min-height: 42px; }
+  #dialog-close {
+    flex-shrink: 0; width: 26px; height: 26px;
+    border-radius: 50%; background: #b45309; color: #fef3c7;
+    border: none; cursor: pointer; font-size: 13px;
+    display: flex; align-items: center; justify-content: center;
+  }
+  #dialog-close:hover { background: #d97706; }
+  #dialog-skip { text-align: right; margin-top: 6px; }
+  #dialog-skip button {
+    background: none; border: none; color: #fbbf24;
+    font-size: 12px; cursor: pointer; font-weight: 500;
+  }
+  #dialog-skip button:hover { color: #fde68a; }
+  /* 谜题面板 */
+  .puzzle-section { margin-bottom: 14px; }
+  .puzzle-label { font-size: 13px; font-weight: bold; color: #78350f; margin-bottom: 8px; }
+  #password-input {
+    width: 100%; font-size: 24px; text-align: center; letter-spacing: 8px;
+    padding: 10px; border: 2px solid #b45309; border-radius: 8px;
+    background: #fffbeb; color: #451a03; font-family: monospace;
+  }
+  #password-input:focus { outline: none; border-color: #d97706; box-shadow: 0 0 0 3px rgba(217, 119, 6, 0.2); }
+  .symbol-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; }
+  .symbol-btn {
+    aspect-ratio: 1; font-size: 32px; border: 2px solid #b45309;
+    background: #fffbeb; border-radius: 10px; cursor: pointer;
+    transition: all 0.15s; display: flex; align-items: center; justify-content: center;
+  }
+  .symbol-btn:hover:not(.selected):not(.disabled) { background: #fef3c7; transform: scale(1.05); }
+  .symbol-btn.selected { background: #d97706; border-color: #92400e; transform: scale(0.95); }
+  .symbol-btn.disabled { opacity: 0.4; cursor: not-allowed; }
+  .combo-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 12px; }
+  .combo-item {
+    aspect-ratio: 1; border: 2px solid; border-radius: 10px;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 4px; padding: 6px;
+  }
+  .combo-item.has { background: #dcfce7; border-color: #16a34a; }
+  .combo-item.miss { background: #fee2e2; border-color: #dc2626; opacity: 0.6; }
+  .combo-item .icon { font-size: 30px; }
+  .combo-item .name { font-size: 11px; font-weight: 600; color: #1e293b; }
+  .combo-item .status { font-size: 10px; }
+  .combo-item.has .status { color: #15803d; }
+  .combo-item.miss .status { color: #b91c1c; }
+  .error-msg { color: #dc2626; font-size: 13px; text-align: center; font-weight: 500; min-height: 18px; }
+  /* 开始/胜利画面 */
+  #start-screen, #win-screen {
+    position: fixed; inset: 0;
+    display: flex; align-items: center; justify-content: center;
+    z-index: 200; padding: 20px;
+  }
+  #start-screen {
+    background: linear-gradient(to bottom, #38bdf8, #fde68a, #d97706);
+  }
+  #win-screen {
+    background: linear-gradient(to bottom, #78350f, #9a3412, #451a03);
+    display: none;
+  }
+  .start-content, .win-content {
+    text-align: center; max-width: 560px; position: relative; z-index: 2;
+  }
+  .start-content h1 {
+    font-size: 48px; color: #78350f; margin-bottom: 8px;
+    text-shadow: 2px 2px 0 rgba(255,255,255,0.5);
+    letter-spacing: 4px;
+  }
+  .start-content .subtitle { color: #92400e; font-size: 18px; margin-bottom: 10px; font-weight: 500; }
+  .start-content .intro {
+    color: rgba(69, 26, 3, 0.85); font-size: 14px; line-height: 1.8;
+    margin-bottom: 24px; max-width: 440px; margin-left: auto; margin-right: auto;
+  }
+  .rules-box {
+    background: rgba(255, 251, 235, 0.85); border: 2px solid rgba(180, 83, 9, 0.4);
+    border-radius: 10px; padding: 14px; margin-bottom: 24px; max-width: 440px; margin-left: auto; margin-right: auto;
+  }
+  .rules-box .title { color: #78350f; font-weight: bold; font-size: 13px; margin-bottom: 8px; }
+  .rules-box ul { list-style: none; text-align: left; }
+  .rules-box li { color: #92400e; font-size: 12px; line-height: 1.9; }
+  .big-btn {
+    background: #b45309; color: #fff; border: 2px solid #92400e;
+    padding: 14px 36px; font-size: 20px; font-weight: bold;
+    border-radius: 10px; cursor: pointer; transition: all 0.2s;
+    box-shadow: 0 6px 20px rgba(0,0,0,0.3);
+  }
+  .big-btn:hover { background: #d97706; transform: translateY(-2px) scale(1.03); box-shadow: 0 8px 25px rgba(0,0,0,0.4); }
+  .big-btn:active { transform: translateY(0) scale(0.98); }
+  .start-icon { font-size: 72px; margin-bottom: 12px; animation: float 2s ease-in-out infinite; }
+  @keyframes float { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
+  .win-content h1 { font-size: 44px; color: #fde68a; margin-bottom: 16px; text-shadow: 2px 2px 0 rgba(0,0,0,0.3); }
+  .win-content p { color: rgba(254, 243, 199, 0.9); font-size: 16px; line-height: 1.8; margin-bottom: 28px; }
+  .win-icon { font-size: 72px; margin-bottom: 16px; animation: bounce 1s infinite; }
+  @keyframes bounce { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-15px); } }
+  /* 装饰云朵 */
+  .deco-cloud {
+    position: absolute; font-size: 40px; opacity: 0.5;
+    animation: drift 20s linear infinite;
+  }
+  @keyframes drift { from { transform: translateX(-100px); } to { transform: translateX(calc(100vw + 100px)); } }
+  /* 地图弹窗 */
+  .map-grid {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;
+    margin: 14px 0;
+  }
+  .map-cell {
+    aspect-ratio: 1; border-radius: 8px; border: 2px solid;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 4px; font-size: 11px; font-weight: bold;
+  }
+  .map-cell.current { background: #fde68a; border-color: #b45309; transform: scale(1.05); box-shadow: 0 4px 12px rgba(217,119,6,0.4); }
+  .map-cell.other { opacity: 0.7; }
+  .map-cell .icon { font-size: 28px; }
+  .map-cell.empty { background: transparent; border: none; }
+</style>
+</head>
+<body>
+
+<!-- 开始画面 -->
+<div id="start-screen">
+  <div class="deco-cloud" style="top: 15%; left: 0;">☁️</div>
+  <div class="deco-cloud" style="top: 25%; left: 0; animation-delay: -7s;">☁️</div>
+  <div class="deco-cloud" style="top: 8%; left: 0; animation-delay: -14s; font-size: 30px;">☁️</div>
+  <div class="start-content">
+    <div class="start-icon">🗺️</div>
+    <h1>迷雾之岛</h1>
+    <div class="subtitle">The Misty Island</div>
+    <p class="intro">
+      你在一座陌生的岛屿上醒来，四周笼罩着神秘的迷雾。
+      探索海滩、森林、洞穴、灯塔与神庙，解开古老谜题，
+      集齐三件神器，找到逃离的方法。
+    </p>
+    <div class="rules-box">
+      <div class="title">📋 游戏说明</div>
+      <ul>
+        <li>• 点击场景中的物品/区域进行互动</li>
+        <li>• 收集物品放入背包，点击背包物品查看详情</li>
+        <li>• 解开密码锁、符号谜题和物品组合谜题</li>
+        <li>• 留意对话和纸条中的线索</li>
+        <li>• 集齐钥匙、宝石、罗盘打开神庙大门</li>
+      </ul>
+    </div>
+    <button class="big-btn" onclick="startGame()">⚓ 开始冒险</button>
+  </div>
+</div>
+
+<!-- 胜利画面 -->
+<div id="win-screen">
+  <div class="win-content">
+    <div class="win-icon">🏝️</div>
+    <h1>恭喜逃离！</h1>
+    <p>
+      你成功集齐了三件神器，打开了神庙大门，<br>
+      找到了离开迷雾之岛的秘密通道。<br>
+      自由的阳光再次照耀在你身上，冒险结束了。
+    </p>
+    <button class="big-btn" onclick="resetGame()">🔄 再玩一次</button>
+  </div>
+</div>
+
+<!-- 游戏主界面 -->
+<div id="game-container" style="display:none;">
+  <div id="top-bar">
+    <div id="scene-info">
+      <span class="icon">📍</span>
+      <div style="min-width:0;">
+        <div id="scene-name">迷雾海滩</div>
+        <div id="scene-desc"></div>
+      </div>
+    </div>
+    <button class="top-btn" onclick="showMap()">🗺️ 地图</button>
+    <button class="top-btn" onclick="showHint()">💡 提示</button>
+  </div>
+
+  <div id="canvas-wrap">
+    <canvas id="game-canvas" width="800" height="500"></canvas>
+    <div id="tooltip"></div>
+  </div>
+
+  <div id="inventory">
+    <div id="inv-title">🎒 背包 (<span id="inv-count">0</span>/9)</div>
+    <div id="inv-slots"></div>
+  </div>
+
+  <div id="footer-tip">
+    💡 点击场景中的物品进行互动，点击出口箭头切换场景。遇到困难可点击右上角"提示"。
+  </div>
+</div>
+
+<!-- 对话框 -->
+<div id="dialog-box">
+  <div id="dialog-content">
+    <div id="dialog-icon">💬</div>
+    <div id="dialog-text"></div>
+    <button id="dialog-close" onclick="closeDialog()">✕</button>
+  </div>
+  <div id="dialog-skip"><button onclick="closeDialog()">点击关闭 ▸</button></div>
+</div>
+
+<!-- 通用弹窗 -->
+<div id="modal-overlay" class="modal-overlay">
+  <div class="modal-box" id="modal-content"></div>
+</div>
+
+<script>
+// ============ 游戏数据 ============
+const ITEMS = {
+  coconut: { name: '椰子', icon: '🥥', description: '一个坚硬的椰子，也许能当工具用。' },
+  bottle: { name: '漂流瓶', icon: '🍾', description: '一个漂流瓶，里面似乎有张纸条。' },
+  note: { name: '纸条', icon: '📜', description: '纸条上写着："潮起潮落，四方之数。日月星电水，序不可乱。"' },
+  key: { name: '铜钥匙', icon: '🗝️', description: '一把古老的铜钥匙，散发着神秘的光芒。' },
+  axe: { name: '石斧', icon: '🪓', description: '一把锋利的石斧，可以砍伐树枝。' },
+  torch: { name: '火把', icon: '🔥', description: '燃烧的火把，能照亮黑暗的洞穴。' },
+  gem: { name: '蓝宝石', icon: '💎', description: '一颗璀璨的蓝宝石，蕴含着神秘力量。' },
+  diary: { name: '日记本', icon: '📔', description: '灯塔守卫的日记，记载着："灯塔建于1923年，密码即此。"' },
+  compass: { name: '罗盘', icon: '🧭', description: '一个古老的罗盘，指针指向未知。' },
+};
+
+const SCENES = {
+  beach: {
+    id: 'beach', name: '迷雾海滩',
+    description: '海浪轻拍沙滩，远处笼罩迷雾。',
+    skyColor: '#FFE4B5', groundColor: '#F4E4BC',
+    playerStart: { x: 0.5, y: 0.7 },
+    decorations: [
+      { type: 'cloud', x: 0.15, y: 0.15, size: 60 },
+      { type: 'cloud', x: 0.7, y: 0.1, size: 80 },
+      { type: 'mountain', x: 0.85, y: 0.45, size: 120 },
+      { type: 'wave', x: 0.3, y: 0.55, size: 40 },
+      { type: 'wave', x: 0.6, y: 0.58, size: 35 },
+      { type: 'wave', x: 0.85, y: 0.52, size: 45 },
+      { type: 'rock', x: 0.1, y: 0.85, size: 30 },
+      { type: 'grass', x: 0.2, y: 0.9, size: 20 },
+      { type: 'grass', x: 0.75, y: 0.88, size: 25 },
+    ],
+    interactables: [
+      { id: 'beach-bottle', type: 'item', name: '漂流瓶', x: 0.25, y: 0.78, w: 0.06, h: 0.1, action: 'pickup-bottle', icon: '🍾', desc: '沙滩上有一个漂流瓶。', visible: s => !s.pickedItems.includes('beach-bottle') },
+      { id: 'beach-coconut', type: 'item', name: '椰子', x: 0.8, y: 0.82, w: 0.05, h: 0.08, action: 'pickup-coconut', icon: '🥥', desc: '椰子树下有一颗椰子。', visible: s => !s.pickedItems.includes('beach-coconut') },
+      { id: 'beach-box', type: 'puzzle', name: '木箱', x: 0.5, y: 0.75, w: 0.1, h: 0.12, action: 'open-box', icon: '📦', desc: '一个上锁的木箱，需要4位密码。', visible: s => !s.solvedPuzzles.includes('box-password') },
+      { id: 'beach-sign', type: 'scenery', name: '木牌', x: 0.4, y: 0.7, w: 0.05, h: 0.1, action: 'read-sign', icon: '🪧', desc: '一块破旧的木牌。' },
+    ],
+    exits: [
+      { id: 'beach-to-forest', target: 'forest', x: 0.92, y: 0.5, w: 0.08, h: 0.5, label: '前往森林 →' },
+    ],
+  },
+  forest: {
+    id: 'forest', name: '密林深处',
+    description: '热带森林，阳光透过树叶洒下光影。',
+    skyColor: '#87CEEB', groundColor: '#2D5016',
+    playerStart: { x: 0.1, y: 0.7 },
+    decorations: [
+      { type: 'tree', x: 0.15, y: 0.4, size: 100 },
+      { type: 'tree', x: 0.35, y: 0.35, size: 90 },
+      { type: 'tree', x: 0.55, y: 0.45, size: 110 },
+      { type: 'tree', x: 0.75, y: 0.38, size: 95 },
+      { type: 'tree', x: 0.9, y: 0.42, size: 105 },
+      { type: 'flower', x: 0.25, y: 0.85, size: 15 },
+      { type: 'flower', x: 0.65, y: 0.88, size: 18 },
+      { type: 'grass', x: 0.45, y: 0.92, size: 22 },
+      { type: 'grass', x: 0.8, y: 0.9, size: 20 },
+    ],
+    interactables: [
+      { id: 'forest-stone', type: 'scenery', name: '古老石碑', x: 0.3, y: 0.65, w: 0.08, h: 0.15, action: 'read-stone', icon: '🪦', desc: '一块刻有古老文字的石碑。' },
+      { id: 'forest-axe', type: 'item', name: '石斧', x: 0.6, y: 0.78, w: 0.06, h: 0.1, action: 'pickup-axe', icon: '🪓', desc: '一把石斧卡在树桩上。', visible: s => !s.pickedItems.includes('forest-axe') },
+      { id: 'forest-stump', type: 'scenery', name: '树桩', x: 0.6, y: 0.82, w: 0.08, h: 0.08, action: 'examine-stump', icon: '🪵', desc: '一个卡着石斧的树桩。', visible: s => !s.pickedItems.includes('forest-axe') },
+    ],
+    exits: [
+      { id: 'forest-to-beach', target: 'beach', x: 0, y: 0.5, w: 0.08, h: 0.5, label: '← 返回海滩' },
+      { id: 'forest-to-cave', target: 'cave', x: 0.92, y: 0.5, w: 0.08, h: 0.5, label: '前往洞穴 →' },
+      { id: 'forest-to-lighthouse', target: 'lighthouse', x: 0.4, y: 0, w: 0.2, h: 0.1, label: '↑ 前往灯塔' },
+      { id: 'forest-to-temple', target: 'temple', x: 0.4, y: 0.9, w: 0.2, h: 0.1, label: '↓ 前往神庙' },
+    ],
+  },
+  cave: {
+    id: 'cave', name: '阴暗洞穴',
+    description: '潮湿黑暗的洞穴，墙壁上有发光符号。',
+    skyColor: '#1a1a2e', groundColor: '#16213e',
+    playerStart: { x: 0.1, y: 0.7 },
+    decorations: [
+      { type: 'rock', x: 0.2, y: 0.3, size: 50, color: '#4a4a6e' },
+      { type: 'rock', x: 0.7, y: 0.25, size: 60, color: '#4a4a6e' },
+      { type: 'rock', x: 0.85, y: 0.4, size: 45, color: '#4a4a6e' },
+      { type: 'crystal', x: 0.15, y: 0.85, size: 25 },
+      { type: 'crystal', x: 0.85, y: 0.88, size: 30 },
+    ],
+    interactables: [
+      { id: 'cave-symbols', type: 'puzzle', name: '神秘符号墙', x: 0.5, y: 0.4, w: 0.4, h: 0.3, action: 'solve-symbols', icon: '🔮', desc: '墙上有五个发光的符号。', visible: s => !s.solvedPuzzles.includes('symbol-puzzle') },
+      { id: 'cave-torch', type: 'item', name: '火把', x: 0.2, y: 0.7, w: 0.05, h: 0.12, action: 'pickup-torch', icon: '🔥', desc: '墙边插着一根火把。', visible: s => !s.pickedItems.includes('cave-torch') },
+    ],
+    exits: [
+      { id: 'cave-to-forest', target: 'forest', x: 0, y: 0.5, w: 0.08, h: 0.5, label: '← 返回森林' },
+    ],
+  },
+  lighthouse: {
+    id: 'lighthouse', name: '废弃灯塔',
+    description: '一座高耸的废弃灯塔，门上有密码锁。',
+    skyColor: '#4a5568', groundColor: '#744210',
+    playerStart: { x: 0.5, y: 0.75 },
+    decorations: [
+      { type: 'building', x: 0.5, y: 0.35, size: 200 },
+      { type: 'cloud', x: 0.2, y: 0.15, size: 50 },
+      { type: 'cloud', x: 0.75, y: 0.1, size: 60 },
+      { type: 'rock', x: 0.15, y: 0.85, size: 35 },
+      { type: 'rock', x: 0.85, y: 0.82, size: 40 },
+      { type: 'grass', x: 0.3, y: 0.9, size: 18 },
+      { type: 'grass', x: 0.7, y: 0.88, size: 22 },
+    ],
+    interactables: [
+      { id: 'lighthouse-door', type: 'puzzle', name: '灯塔大门', x: 0.45, y: 0.55, w: 0.1, h: 0.25, action: 'open-lighthouse', icon: '🚪', desc: '灯塔门上有4位密码锁。', visible: s => !s.solvedPuzzles.includes('lighthouse-password') },
+      { id: 'lighthouse-diary', type: 'item', name: '日记本', x: 0.25, y: 0.85, w: 0.06, h: 0.08, action: 'pickup-diary', icon: '📔', desc: '地上有一本破旧的日记。', visible: s => !s.pickedItems.includes('lighthouse-diary') },
+    ],
+    exits: [
+      { id: 'lighthouse-to-forest', target: 'forest', x: 0, y: 0.5, w: 0.08, h: 0.5, label: '← 返回森林' },
+    ],
+  },
+  temple: {
+    id: 'temple', name: '神秘神庙',
+    description: '古老的神庙大门紧闭，需要三件神器。',
+    skyColor: '#7c2d12', groundColor: '#451a03',
+    playerStart: { x: 0.5, y: 0.8 },
+    decorations: [
+      { type: 'building', x: 0.5, y: 0.4, size: 250, color: '#78350f' },
+      { type: 'fire', x: 0.2, y: 0.6, size: 30 },
+      { type: 'fire', x: 0.8, y: 0.6, size: 30 },
+      { type: 'rock', x: 0.1, y: 0.85, size: 40 },
+      { type: 'rock', x: 0.9, y: 0.85, size: 38 },
+    ],
+    interactables: [
+      { id: 'temple-door', type: 'puzzle', name: '神庙大门', x: 0.4, y: 0.45, w: 0.2, h: 0.35, action: 'open-temple', icon: '⛩️', desc: '神庙大门有三个凹槽。', visible: s => !s.solvedPuzzles.includes('temple-final') },
+    ],
+    exits: [
+      { id: 'temple-to-forest', target: 'forest', x: 0, y: 0.5, w: 0.08, h: 0.5, label: '← 返回森林' },
+    ],
+  },
+};
+
+const PUZZLES = {
+  'box-password': {
+    id: 'box-password', type: 'password', title: '木箱密码锁',
+    description: '木箱上有一个4位密码锁。石碑上刻着"二五八零"。',
+    answer: '2580', reward: 'key',
+    successMessage: '木箱打开了！你获得了一把铜钥匙。',
+  },
+  'symbol-puzzle': {
+    id: 'symbol-puzzle', type: 'symbol-sequence', title: '古老符号',
+    description: '墙上有五个发光的符号，需要按正确顺序点击。纸条上写着"日月星电水，序不可乱"。',
+    symbols: ['💧', '⚡', '⭐', '🌙', '☀️'],
+    correctSequence: [4, 3, 2, 1, 0],
+    reward: 'gem',
+    successMessage: '符号按正确顺序亮起！一颗蓝宝石从墙中浮现。',
+  },
+  'lighthouse-password': {
+    id: 'lighthouse-password', type: 'password', title: '灯塔密码门',
+    description: '灯塔门上有一个4位密码锁。日记中记载"灯塔建于1923年，密码即此"。',
+    answer: '1923', reward: 'compass',
+    successMessage: '密码门打开了！你在灯塔内找到了一个罗盘。',
+  },
+  'temple-final': {
+    id: 'temple-final', type: 'item-combo', title: '神庙大门',
+    description: '神庙大门有三个凹槽，需要放入铜钥匙、蓝宝石和罗盘。',
+    requiredItems: ['key', 'gem', 'compass'],
+    reward: 'key',
+    successMessage: '三个物品嵌入凹槽，神庙大门缓缓打开！你找到了离开岛屿的方法，重获自由！',
+  },
+};
+
+const HINTS = {
+  start: '探索海滩，收集物品，点击场景中的物体进行互动。',
+  'has-bottle': '打开背包查看漂流瓶中的纸条，它包含重要线索。',
+  'has-note': '纸条提到了"四方之数"和"日月星电水"，去森林找石碑。',
+  'has-key': '你有了钥匙！现在还需要蓝宝石和罗盘。',
+  'forest-stone': '石碑上刻着"二五八零"，这可能是海滩木箱的密码。',
+  'need-axe': '石斧卡在树桩上，直接拔拔不动。也许用硬物敲击树桩？',
+  'has-axe': '有了石斧，可以砍伐洞穴入口的树枝了。',
+  'cave-symbols': '按照纸条上的"日月星电水"顺序点击符号。',
+  'has-gem': '你有了蓝宝石！还需要去灯塔找罗盘。',
+  'lighthouse-need-diary': '灯塔门需要密码，先找找有没有线索。地上有本日记。',
+  'has-diary': '日记记载灯塔建于1923年，密码就是1923。',
+  'has-compass': '你集齐了钥匙、宝石和罗盘！去神庙打开大门吧。',
+  'temple-ready': '点击神庙大门，放入三个物品即可通关。',
+};
+
+// ============ 游戏状态 ============
+let state = {
+  currentScene: 'beach',
+  inventory: [],
+  solvedPuzzles: [],
+  triggeredEvents: [],
+  pickedItems: [],
+  playerPos: { x: 0.5, y: 0.7 },
+  phase: 'start',
+};
+
+const canvas = document.getElementById('game-canvas');
+const ctx = canvas.getContext('2d');
+let hoveredItem = null;
+let tooltipEl = document.getElementById('tooltip');
+
+// ============ 绘制函数 ============
+function drawDecoration(dec, w, h) {
+  const x = dec.x * w, y = dec.y * h, s = dec.size;
+  switch (dec.type) {
+    case 'tree':
+      ctx.fillStyle = '#5D4037';
+      ctx.fillRect(x - s*0.08, y + s*0.3, s*0.16, s*0.5);
+      ctx.fillStyle = dec.color || '#2E7D32';
+      ctx.beginPath(); ctx.arc(x, y, s*0.4, 0, Math.PI*2); ctx.fill();
+      ctx.fillStyle = (dec.color || '#2E7D32') + 'CC';
+      ctx.beginPath(); ctx.arc(x - s*0.2, y + s*0.1, s*0.3, 0, Math.PI*2); ctx.fill();
+      ctx.beginPath(); ctx.arc(x + s*0.2, y + s*0.1, s*0.3, 0, Math.PI*2); ctx.fill();
+      break;
+    case 'rock':
+      ctx.fillStyle = dec.color || '#757575';
+      ctx.beginPath(); ctx.ellipse(x, y, s*0.5, s*0.35, 0, 0, Math.PI*2); ctx.fill();
+      ctx.fillStyle = '#9E9E9E';
+      ctx.beginPath(); ctx.ellipse(x - s*0.15, y - s*0.1, s*0.2, s*0.12, 0, 0, Math.PI*2); ctx.fill();
+      break;
+    case 'cloud':
+      ctx.fillStyle = 'rgba(255,255,255,0.85)';
+      ctx.beginPath(); ctx.arc(x, y, s*0.4, 0, Math.PI*2); ctx.fill();
+      ctx.beginPath(); ctx.arc(x + s*0.3, y + s*0.05, s*0.35, 0, Math.PI*2); ctx.fill();
+      ctx.beginPath(); ctx.arc(x - s*0.3, y + s*0.05, s*0.3, 0, Math.PI*2); ctx.fill();
+      ctx.beginPath(); ctx.ellipse(x, y + s*0.2, s*0.5, s*0.15, 0, 0, Math.PI*2); ctx.fill();
+      break;
+    case 'wave':
+      ctx.strokeStyle = 'rgba(70, 130, 180, 0.6)';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(x - s*0.5, y);
+      ctx.quadraticCurveTo(x - s*0.25, y - s*0.2, x, y);
+      ctx.quadraticCurveTo(x + s*0.25, y + s*0.2, x + s*0.5, y);
+      ctx.stroke();
+      break;
+    case 'mountain':
+      ctx.fillStyle = '#6D4C41';
+      ctx.beginPath();
+      ctx.moveTo(x - s*0.5, y + s*0.3);
+      ctx.lineTo(x, y - s*0.5);
+      ctx.lineTo(x + s*0.5, y + s*0.3);
+      ctx.closePath(); ctx.fill();
+      ctx.fillStyle = '#fff';
+      ctx.beginPath();
+      ctx.moveTo(x - s*0.15, y - s*0.15);
+      ctx.lineTo(x, y - s*0.5);
+      ctx.lineTo(x + s*0.15, y - s*0.15);
+      ctx.closePath(); ctx.fill();
+      break;
+    case 'grass':
+      ctx.strokeStyle = '#558B2F';
+      ctx.lineWidth = 2;
+      for (let i = -2; i <= 2; i++) {
+        ctx.beginPath();
+        ctx.moveTo(x + i*4, y + s*0.3);
+        ctx.lineTo(x + i*4, y - s*0.2);
+        ctx.stroke();
+      }
+      break;
+    case 'flower':
+      ctx.fillStyle = '#E91E63';
+      for (let i = 0; i < 5; i++) {
+        const a = (i / 5) * Math.PI * 2;
+        ctx.beginPath();
+        ctx.arc(x + Math.cos(a)*s*0.25, y + Math.sin(a)*s*0.25, s*0.2, 0, Math.PI*2);
+        ctx.fill();
+      }
+      ctx.fillStyle = '#FFEB3B';
+      ctx.beginPath(); ctx.arc(x, y, s*0.15, 0, Math.PI*2); ctx.fill();
+      break;
+    case 'building':
+      ctx.fillStyle = dec.color || '#9E9E9E';
+      ctx.fillRect(x - s*0.15, y - s*0.4, s*0.3, s*0.7);
+      ctx.fillStyle = dec.color ? dec.color + '88' : '#757575';
+      ctx.fillRect(x - s*0.18, y - s*0.45, s*0.36, s*0.08);
+      if (dec.size > 150) {
+        ctx.fillStyle = '#FFEB3B';
+        ctx.beginPath(); ctx.arc(x, y - s*0.5, s*0.06, 0, Math.PI*2); ctx.fill();
+        ctx.fillStyle = 'rgba(255, 235, 59, 0.3)';
+        ctx.beginPath(); ctx.arc(x, y - s*0.5, s*0.12, 0, Math.PI*2); ctx.fill();
+      }
+      break;
+    case 'fire':
+      ctx.fillStyle = '#FF6F00';
+      ctx.beginPath();
+      ctx.moveTo(x, y - s*0.5);
+      ctx.quadraticCurveTo(x - s*0.3, y, x, y + s*0.3);
+      ctx.quadraticCurveTo(x + s*0.3, y, x, y - s*0.5);
+      ctx.fill();
+      ctx.fillStyle = '#FFEB3B';
+      ctx.beginPath();
+      ctx.moveTo(x, y - s*0.25);
+      ctx.quadraticCurveTo(x - s*0.15, y, x, y + s*0.15);
+      ctx.quadraticCurveTo(x + s*0.15, y, x, y - s*0.25);
+      ctx.fill();
+      break;
+    case 'crystal':
+      ctx.fillStyle = dec.color || '#9C27B0';
+      ctx.beginPath();
+      ctx.moveTo(x, y - s*0.5);
+      ctx.lineTo(x + s*0.3, y);
+      ctx.lineTo(x, y + s*0.5);
+      ctx.lineTo(x - s*0.3, y);
+      ctx.closePath(); ctx.fill();
+      ctx.fillStyle = 'rgba(255,255,255,0.4)';
+      ctx.beginPath();
+      ctx.moveTo(x, y - s*0.5);
+      ctx.lineTo(x + s*0.15, y - s*0.1);
+      ctx.lineTo(x, y);
+      ctx.closePath(); ctx.fill();
+      break;
+  }
+}
+
+function drawInteractable(item, w, h, isHovered) {
+  const x = item.x * w, y = item.y * h;
+  const iw = item.w * w, ih = item.h * h;
+  // 光晕
+  if (isHovered) {
+    const grad = ctx.createRadialGradient(x + iw/2, y + ih/2, 0, x + iw/2, y + ih/2, Math.max(iw, ih));
+    grad.addColorStop(0, 'rgba(255, 235, 59, 0.5)');
+    grad.addColorStop(1, 'rgba(255, 235, 59, 0)');
+    ctx.fillStyle = grad;
+    ctx.fillRect(x - 20, y - 20, iw + 40, ih + 40);
+  }
+  // 图标
+  ctx.font = `${Math.min(iw, ih) * 1.2}px serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(item.icon, x + iw/2, y + ih/2);
+  // 悬停边框
+  if (isHovered) {
+    ctx.strokeStyle = '#FFEB3B';
+    ctx.lineWidth = 3;
+    ctx.setLineDash([6, 4]);
+    ctx.strokeRect(x - 4, y - 4, iw + 8, ih + 8);
+    ctx.setLineDash([]);
+  }
+}
+
+function drawExit(exit, w, h, isHovered, isLocked) {
+  const x = exit.x * w, y = exit.y * h;
+  const ew = exit.w * w, eh = exit.h * h;
+  // 箭头区域
+  ctx.fillStyle = isHovered ? 'rgba(255, 235, 59, 0.4)' : 'rgba(255, 255, 255, 0.15)';
+  ctx.fillRect(x, y, ew, eh);
+  ctx.strokeStyle = isHovered ? '#FFEB3B' : 'rgba(255, 255, 255, 0.5)';
+  ctx.lineWidth = 2;
+  ctx.setLineDash([5, 3]);
+  ctx.strokeRect(x + 2, y + 2, ew - 4, eh - 4);
+  ctx.setLineDash([]);
+  // 箭头
+  const cx = x + ew/2, cy = y + eh/2;
+  ctx.fillStyle = isLocked ? '#EF4444' : (isHovered ? '#FFEB3B' : '#fff');
+  ctx.font = 'bold 28px serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  let arrow = '→';
+  if (exit.label.includes('←')) arrow = '←';
+  else if (exit.label.includes('↑')) arrow = '↑';
+  else if (exit.label.includes('↓')) arrow = '↓';
+  if (isLocked) arrow = '🔒';
+  ctx.fillText(arrow, cx, cy - 8);
+  // 标签
+  ctx.font = 'bold 10px sans-serif';
+  ctx.fillStyle = isLocked ? '#FCA5A5' : '#fff';
+  const label = exit.label.replace(/[←→↑↓]/g, '').trim();
+  ctx.fillText(label, cx, cy + 14);
+}
+
+function drawPlayer(w, h) {
+  const x = state.playerPos.x * w, y = state.playerPos.y * h;
+  const size = 24;
+  // 阴影
+  ctx.fillStyle = 'rgba(0,0,0,0.3)';
+  ctx.beginPath(); ctx.ellipse(x, y + size*0.5, size*0.5, size*0.15, 0, 0, Math.PI*2); ctx.fill();
+  // 身体
+  ctx.fillStyle = '#1565C0';
+  ctx.fillRect(x - size*0.3, y - size*0.1, size*0.6, size*0.5);
+  // 头
+  ctx.fillStyle = '#FFCC80';
+  ctx.beginPath(); ctx.arc(x, y - size*0.25, size*0.3, 0, Math.PI*2); ctx.fill();
+  // 头发
+  ctx.fillStyle = '#5D4037';
+  ctx.beginPath(); ctx.arc(x, y - size*0.35, size*0.3, Math.PI, 0); ctx.fill();
+  // 眼睛
+  ctx.fillStyle = '#000';
+  ctx.beginPath(); ctx.arc(x - size*0.1, y - size*0.22, 1.5, 0, Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(x + size*0.1, y - size*0.22, 1.5, 0, Math.PI*2); ctx.fill();
+}
+
+function drawScene() {
+  const w = canvas.width, h = canvas.height;
+  const scene = SCENES[state.currentScene];
+  // 天空
+  const skyGrad = ctx.createLinearGradient(0, 0, 0, h * 0.7);
+  skyGrad.addColorStop(0, scene.skyColor);
+  skyGrad.addColorStop(1, scene.skyColor + 'AA');
+  ctx.fillStyle = skyGrad;
+  ctx.fillRect(0, 0, w, h * 0.7);
+  // 地面
+  const groundGrad = ctx.createLinearGradient(0, h * 0.6, 0, h);
+  groundGrad.addColorStop(0, scene.groundColor);
+  groundGrad.addColorStop(1, scene.groundColor + 'DD');
+  ctx.fillStyle = groundGrad;
+  ctx.fillRect(0, h * 0.6, w, h * 0.4);
+  // 装饰物
+  scene.decorations.forEach(dec => drawDecoration(dec, w, h));
+  // 交互物
+  scene.interactables.forEach(item => {
+    if (item.visible && !item.visible(state)) return;
+    drawInteractable(item, w, h, hoveredItem === item.id);
+  });
+  // 出口
+  scene.exits.forEach(exit => {
+    const isLocked = false; // 本游戏出口不锁
+    drawExit(exit, w, h, hoveredItem === exit.id, isLocked);
+  });
+  // 玩家
+  drawPlayer(w, h);
+}
+
+// ============ 交互处理 ============
+function getCanvasPos(e) {
+  const rect = canvas.getBoundingClientRect();
+  const scaleX = canvas.width / rect.width;
+  const scaleY = canvas.height / rect.height;
+  return {
+    x: (e.clientX - rect.left) * scaleX,
+    y: (e.clientY - rect.top) * scaleY,
+    rectX: e.clientX - rect.left,
+    rectY: e.clientY - rect.top,
+  };
+}
+
+function findItemAt(x, y) {
+  const w = canvas.width, h = canvas.height;
+  const scene = SCENES[state.currentScene];
+  // 检查交互物
+  for (const item of scene.interactables) {
+    if (item.visible && !item.visible(state)) continue;
+    const ix = item.x * w, iy = item.y * h;
+    const iw = item.w * w, ih = item.h * h;
+    if (x >= ix && x <= ix + iw && y >= iy && y <= iy + ih) {
+      return { type: 'interactable', item };
+    }
+  }
+  // 检查出口
+  for (const exit of scene.exits) {
+    const ex = exit.x * w, ey = exit.y * h;
+    const ew = exit.w * w, eh = exit.h * h;
+    if (x >= ex && x <= ex + ew && y >= ey && y <= ey + eh) {
+      return { type: 'exit', exit };
+    }
+  }
+  return null;
+}
+
+canvas.addEventListener('mousemove', (e) => {
+  const pos = getCanvasPos(e);
+  const found = findItemAt(pos.x, pos.y);
+  hoveredItem = found ? (found.item ? found.item.id : found.exit.id) : null;
+  // tooltip
+  if (found) {
+    const text = found.type === 'exit' ? found.exit.label : found.item.name;
+    tooltipEl.textContent = text;
+    tooltipEl.style.left = pos.rectX + 'px';
+    tooltipEl.style.top = (pos.rectY - 10) + 'px';
+    tooltipEl.style.display = 'block';
+    canvas.style.cursor = 'pointer';
+  } else {
+    tooltipEl.style.display = 'none';
+    canvas.style.cursor = 'default';
+  }
+  drawScene();
+});
+
+canvas.addEventListener('mouseleave', () => {
+  hoveredItem = null;
+  tooltipEl.style.display = 'none';
+  drawScene();
+});
+
+canvas.addEventListener('click', (e) => {
+  const pos = getCanvasPos(e);
+  const found = findItemAt(pos.x, pos.y);
+  if (!found) return;
+  if (found.type === 'exit') {
+    changeScene(found.exit.target);
+  } else {
+    handleAction(found.item);
+  }
+});
+
+// ============ 游戏逻辑 ============
+function handleAction(item) {
+  switch (item.action) {
+    case 'pickup-bottle':
+      pickItem(item.id, 'bottle');
+      addItem('note');
+      showDialog('你拾起了一个漂流瓶。瓶子里有一张纸条，上面写着："潮起潮落，四方之数。日月星电水，序不可乱。"');
+      break;
+    case 'pickup-coconut':
+      pickItem(item.id, 'coconut');
+      showDialog('你拾起了一个坚硬的椰子，也许能当工具用。');
+      break;
+    case 'pickup-axe':
+      if (state.inventory.includes('coconut')) {
+        pickItem(item.id, 'axe');
+        showDialog('你用椰子敲击树桩，石斧松动了！你获得了石斧。');
+      } else {
+        showDialog('石斧卡得很紧，直接拔拔不动。也许需要用硬物敲击树桩？');
+      }
+      break;
+    case 'pickup-torch':
+      pickItem(item.id, 'torch');
+      showDialog('你拔出墙边的火把，洞穴变得明亮了一些。');
+      break;
+    case 'pickup-diary':
+      pickItem(item.id, 'diary');
+      showDialog('你拾起日记本。上面记载着："灯塔建于1923年，密码即此。"');
+      break;
+    case 'open-box':
+      openPuzzle('box-password');
+      break;
+    case 'solve-symbols':
+      openPuzzle('symbol-puzzle');
+      break;
+    case 'open-lighthouse':
+      openPuzzle('lighthouse-password');
+      break;
+    case 'open-temple':
+      openPuzzle('temple-final');
+      break;
+    case 'read-sign':
+      showDialog('木牌上刻着："迷雾之岛，三神器镇守。寻钥、寻石、寻盘，方可离去。"');
+      break;
+    case 'read-stone':
+      showDialog('石碑上刻着古老的文字："二五八零"。这似乎是某个密码...');
+      break;
+    case 'examine-stump':
+      if (state.inventory.includes('coconut')) {
+        showDialog('树桩上卡着石斧。你可以用椰子敲击树桩试试。');
+      } else {
+        showDialog('树桩上卡着一把石斧，直接拔拔不动。需要找个硬物敲击。');
+      }
+      break;
+  }
+  updateUI();
+}
+
+function pickItem(interactableId, item) {
+  if (!state.pickedItems.includes(interactableId)) {
+    state.pickedItems.push(interactableId);
+  }
+  if (!state.inventory.includes(item)) {
+    state.inventory.push(item);
+  }
+  updateUI();
+  drawScene();
+}
+
+function addItem(item) {
+  if (!state.inventory.includes(item)) {
+    state.inventory.push(item);
+  }
+  updateUI();
+}
+
+function changeScene(sceneId) {
+  state.currentScene = sceneId;
+  state.playerPos = { ...SCENES[sceneId].playerStart };
+  updateUI();
+  drawScene();
+}
+
+function openPuzzle(puzzleId) {
+  const puzzle = PUZZLES[puzzleId];
+  const overlay = document.getElementById('modal-overlay');
+  const content = document.getElementById('modal-content');
+  let html = `<div class="modal-title">🔮 ${puzzle.title}</div>`;
+  html += `<div class="modal-desc">${puzzle.description}</div>`;
+  if (puzzle.type === 'password') {
+    html += `<div class="puzzle-section">
+      <div class="puzzle-label">请输入4位密码：</div>
+      <input id="password-input" type="text" maxlength="4" placeholder="****" inputmode="numeric">
+      <div class="error-msg" id="puzzle-error"></div>
+    </div>
+    <button class="modal-btn" onclick="submitPassword('${puzzleId}')">确认提交</button>
+    <button class="modal-btn secondary" style="margin-top:8px;" onclick="closeModal()">先放一放</button>`;
+  } else if (puzzle.type === 'symbol-sequence') {
+    html += `<div class="puzzle-section">
+      <div class="puzzle-label">按"日月星电水"顺序点击符号：</div>
+      <div class="symbol-grid" id="symbol-grid">`;
+    puzzle.symbols.forEach((sym, i) => {
+      html += `<div class="symbol-btn" data-idx="${i}" onclick="clickSymbol('${puzzleId}', ${i})">${sym}</div>`;
+    });
+    html += `</div>
+      <div class="error-msg" id="puzzle-error"></div>
+    </div>
+    <button class="modal-btn secondary" onclick="closeModal()">先放一放</button>`;
+  } else if (puzzle.type === 'item-combo') {
+    html += `<div class="puzzle-section">
+      <div class="puzzle-label">需要放入三件神器：</div>
+      <div class="combo-grid">`;
+    puzzle.requiredItems.forEach(itemId => {
+      const info = ITEMS[itemId];
+      const has = state.inventory.includes(itemId);
+      html += `<div class="combo-item ${has ? 'has' : 'miss'}">
+        <div class="icon">${info.icon}</div>
+        <div class="name">${info.name}</div>
+        <div class="status">${has ? '✓ 已拥有' : '✗ 缺少'}</div>
+      </div>`;
+    });
+    html += `</div>
+      <div class="error-msg" id="puzzle-error"></div>
+    </div>
+    <button class="modal-btn" onclick="submitCombo('${puzzleId}')">放入物品，开启大门</button>
+    <button class="modal-btn secondary" style="margin-top:8px;" onclick="closeModal()">先放一放</button>`;
+  }
+  content.innerHTML = html;
+  overlay.classList.add('show');
+  // 自动聚焦密码输入框
+  setTimeout(() => {
+    const input = document.getElementById('password-input');
+    if (input) input.focus();
+  }, 100);
+}
+
+function closeModal() {
+  document.getElementById('modal-overlay').classList.remove('show');
+}
+
+function submitPassword(puzzleId) {
+  const puzzle = PUZZLES[puzzleId];
+  const input = document.getElementById('password-input');
+  const errorEl = document.getElementById('puzzle-error');
+  if (input.value === puzzle.answer) {
+    solvePuzzle(puzzleId);
+  } else {
+    errorEl.textContent = '密码错误，再想想...';
+    input.value = '';
+    input.focus();
+  }
+}
+
+let symbolSelections = [];
+function clickSymbol(puzzleId, idx) {
+  const puzzle = PUZZLES[puzzleId];
+  if (symbolSelections.includes(idx)) return;
+  symbolSelections.push(idx);
+  const btn = document.querySelector(`.symbol-btn[data-idx="${idx}"]`);
+  btn.classList.add('selected');
+  if (symbolSelections.length === puzzle.correctSequence.length) {
+    const correct = puzzle.correctSequence.every((v, i) => v === symbolSelections[i]);
+    if (correct) {
+      solvePuzzle(puzzleId);
+    } else {
+      document.getElementById('puzzle-error').textContent = '顺序不对，重新试试...';
+      setTimeout(() => {
+        symbolSelections = [];
+        document.querySelectorAll('.symbol-btn').forEach(b => b.classList.remove('selected'));
+        document.getElementById('puzzle-error').textContent = '';
+      }, 1000);
+    }
+  }
+}
+
+function submitCombo(puzzleId) {
+  const puzzle = PUZZLES[puzzleId];
+  const hasAll = puzzle.requiredItems.every(item => state.inventory.includes(item));
+  if (hasAll) {
+    solvePuzzle(puzzleId);
+  } else {
+    document.getElementById('puzzle-error').textContent = '还缺少物品，继续探索吧！';
+  }
+}
+
+function solvePuzzle(puzzleId) {
+  const puzzle = PUZZLES[puzzleId];
+  if (!state.solvedPuzzles.includes(puzzleId)) {
+    state.solvedPuzzles.push(puzzleId);
+  }
+  if (puzzleId !== 'temple-final' && !state.inventory.includes(puzzle.reward)) {
+    state.inventory.push(puzzle.reward);
+  }
+  closeModal();
+  symbolSelections = [];
+  updateUI();
+  drawScene();
+  showDialog(puzzle.successMessage);
+  if (puzzleId === 'temple-final') {
+    setTimeout(() => {
+      document.getElementById('win-screen').style.display = 'flex';
+      state.phase = 'won';
+    }, 4000);
+  }
+}
+
+// ============ UI 更新 ============
+function updateUI() {
+  const scene = SCENES[state.currentScene];
+  document.getElementById('scene-name').textContent = scene.name;
+  document.getElementById('scene-desc').textContent = scene.description;
+  // 背包
+  const slotsEl = document.getElementById('inv-slots');
+  let html = '';
+  for (let i = 0; i < 9; i++) {
+    const item = state.inventory[i];
+    if (item) {
+      html += `<div class="inv-slot has-item" onclick="showItemDetail('${item}')" title="${ITEMS[item].name}">${ITEMS[item].icon}</div>`;
+    } else {
+      html += `<div class="inv-slot"></div>`;
+    }
+  }
+  slotsEl.innerHTML = html;
+  document.getElementById('inv-count').textContent = state.inventory.length;
+}
+
+function showItemDetail(itemId) {
+  const info = ITEMS[itemId];
+  const content = document.getElementById('modal-content');
+  content.innerHTML = `
+    <div class="modal-title"><span style="font-size:32px;">${info.icon}</span> ${info.name}</div>
+    <div class="modal-desc">${info.description}</div>
+    <button class="modal-btn" onclick="closeModal()">收起</button>
+  `;
+  document.getElementById('modal-overlay').classList.add('show');
+}
+
+// ============ 对话框 ============
+let dialogTimer = null;
+function showDialog(text) {
+  const box = document.getElementById('dialog-box');
+  const textEl = document.getElementById('dialog-text');
+  box.classList.add('show');
+  textEl.textContent = '';
+  let i = 0;
+  if (dialogTimer) clearInterval(dialogTimer);
+  dialogTimer = setInterval(() => {
+    if (i < text.length) {
+      textEl.textContent = text.slice(0, i + 1);
+      i++;
+    } else {
+      clearInterval(dialogTimer);
+    }
+  }, 25);
+}
+
+function closeDialog() {
+  document.getElementById('dialog-box').classList.remove('show');
+  if (dialogTimer) clearInterval(dialogTimer);
+}
+
+// ============ 提示 ============
+function getCurrentHint() {
+  if (state.solvedPuzzles.includes('temple-final')) return '恭喜你逃离了迷雾之岛！';
+  if (state.inventory.includes('key') && state.inventory.includes('gem') && state.inventory.includes('compass')) return HINTS['temple-ready'];
+  if (state.inventory.includes('compass')) return HINTS['has-compass'];
+  if (state.inventory.includes('diary')) return HINTS['has-diary'];
+  if (state.inventory.includes('gem')) return HINTS['has-gem'];
+  if (state.currentScene === 'cave' && !state.solvedPuzzles.includes('symbol-puzzle')) return HINTS['cave-symbols'];
+  if (state.inventory.includes('axe')) return HINTS['has-axe'];
+  if (state.currentScene === 'forest' && !state.inventory.includes('axe')) return HINTS['need-axe'];
+  if (state.inventory.includes('key')) return HINTS['has-key'];
+  if (state.inventory.includes('note')) return HINTS['has-note'];
+  if (state.inventory.includes('bottle')) return HINTS['has-bottle'];
+  if (state.currentScene === 'lighthouse' && !state.inventory.includes('diary')) return HINTS['lighthouse-need-diary'];
+  return HINTS['start'];
+}
+
+function showHint() {
+  const content = document.getElementById('modal-content');
+  content.innerHTML = `
+    <div class="modal-title">💡 当前提示</div>
+    <div class="modal-desc">${getCurrentHint()}</div>
+    <button class="modal-btn" onclick="closeModal()">知道了</button>
+  `;
+  document.getElementById('modal-overlay').classList.add('show');
+}
+
+// ============ 地图 ============
+function showMap() {
+  const content = document.getElementById('modal-content');
+  const scenes = [
+    { id: 'lighthouse', icon: '🗼', name: '灯塔', color: '#fbbf24', border: '#d97706' },
+    { id: '', empty: true },
+    { id: '', empty: true },
+    { id: 'beach', icon: '🏖️', name: '海滩', color: '#fde68a', border: '#d97706' },
+    { id: 'forest', icon: '🌲', name: '森林', color: '#86efac', border: '#16a34a' },
+    { id: 'cave', icon: '🕳️', name: '洞穴', color: '#cbd5e1', border: '#475569' },
+    { id: '', empty: true },
+    { id: 'temple', icon: '⛩️', name: '神庙', color: '#fed7aa', border: '#c2410c' },
+    { id: '', empty: true },
+  ];
+  let html = `<div class="modal-title">🗺️ 岛屿地图</div>
+    <div class="map-grid">`;
+  scenes.forEach(s => {
+    if (s.empty) {
+      html += `<div class="map-cell empty"></div>`;
+    } else {
+      const cur = state.currentScene === s.id;
+      html += `<div class="map-cell ${cur ? 'current' : 'other'}" style="background:${s.color};border-color:${s.border};">
+        <div class="icon">${s.icon}</div>
+        <div style="color:#451a03;">${s.name}</div>
+      </div>`;
+    }
+  });
+  html += `</div>
+    <div style="font-size:11px;color:#78350f;text-align:center;margin-bottom:12px;">当前位置高亮显示。点击场景中的出口箭头可移动。</div>
+    <button class="modal-btn" onclick="closeModal()">关闭地图</button>`;
+  content.innerHTML = html;
+  document.getElementById('modal-overlay').classList.add('show');
+}
+
+// ============ 游戏控制 ============
+function startGame() {
+  state = {
+    currentScene: 'beach',
+    inventory: [],
+    solvedPuzzles: [],
+    triggeredEvents: [],
+    pickedItems: [],
+    playerPos: { x: 0.5, y: 0.7 },
+    phase: 'playing',
+  };
+  document.getElementById('start-screen').style.display = 'none';
+  document.getElementById('game-container').style.display = 'flex';
+  updateUI();
+  drawScene();
+  setTimeout(() => {
+    showDialog('你在一座陌生的岛屿海滩上醒来。海浪轻拍沙滩，远处笼罩着迷雾。探索四周，寻找离开的方法...');
+  }, 300);
+}
+
+function resetGame() {
+  document.getElementById('win-screen').style.display = 'none';
+  symbolSelections = [];
+  startGame();
+}
+
+// 点击遮罩关闭弹窗
+document.getElementById('modal-overlay').addEventListener('click', (e) => {
+  if (e.target.id === 'modal-overlay') closeModal();
+});
+
+// 密码输入回车提交
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') {
+    const input = document.getElementById('password-input');
+    if (input && document.activeElement === input) {
+      const overlay = document.getElementById('modal-overlay');
+      if (overlay.classList.contains('show')) {
+        // 找到当前谜题
+        const btn = document.querySelector('.modal-btn:not(.secondary)');
+        if (btn) btn.click();
+      }
+    }
+  }
+  if (e.key === 'Escape') {
+    closeModal();
+    closeDialog();
+  }
+});
+
+// 初始绘制
+drawScene();
+</script>
+</body>
+</html>
